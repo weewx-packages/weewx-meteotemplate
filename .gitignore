@@ -1,1 +1,6 @@
+# Modified 2026-10-22 by weewx-packages: ignore local test artifacts.
 *~
+
+__pycache__/
+.pytest_cache/
+*.pyc

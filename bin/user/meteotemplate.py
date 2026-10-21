@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Modified 2026-10-22 by weewx-packages: compatibility and tracker repairs.
 # Copyright 2016-2020 Matthew Wall
 # Licensed under the terms of the GPLv3
 
@@ -52,32 +53,38 @@ schema.  Battery voltages are not included (the meteotemplate API has no
 provision for battery voltage).
 """
 
-try:
-    # Python 3
-    import queue
-except ImportError:
-    # Python 2
-    import Queue as queue
+import queue
 import sys
 import time
-from distutils.version import StrictVersion
-
-try:
-    # Python 3
-    from urllib.parse import urlencode
-except ImportError:
-    # Python 2
-    from urllib import urlencode
+import re
+from urllib.parse import urlencode
 
 import weewx
 import weewx.restx
 import weewx.units
 from weeutil.weeutil import to_bool, list_as_string
 
-VERSION = "0.10"
+VERSION = "0.11.0"
+
+def _version_key(value):
+    """Return a release tuple with prereleases before the final release.
+
+    Args:
+        value (str): A WeeWX version, including optional a/b/rc/dev suffixes.
+
+    Returns:
+        tuple[int, int, int, int]: Release numbers followed by a final-release flag.
+    """
+    match = re.match(r'^(\d+)(?:\.(\d+))?(?:\.(\d+))?(.*)$', value)
+    if match is None:
+        raise ValueError('Invalid WeeWX version: %s' % value)
+    release = (int(match.group(1)), int(match.group(2) or 0), int(match.group(3) or 0))
+    prerelease = re.match(r'(?:a|b|rc|dev|[.-]dev)', match.group(4), re.I)
+    return release + (0 if prerelease else 1,)
+
 
 REQUIRED_WEEWX = "3.5.0"
-if StrictVersion(weewx.__version__) < StrictVersion(REQUIRED_WEEWX):
+if _version_key(weewx.__version__) < _version_key(REQUIRED_WEEWX):
     raise weewx.UnsupportedFeature("weewx %s or greater is required, found %s"
                                    % (REQUIRED_WEEWX, weewx.__version__))
 
@@ -132,6 +139,7 @@ class Meteotemplate(weewx.restx.StdRESTbase):
         if site_dict is None:
             return
 
+        site_dict['field_map'] = dict(cfg_dict['StdRESTful']['Meteotemplate'].get('field_map', {}))
         binding = list_as_string(site_dict.pop('binding', 'archive')).lower()
 
         try:
@@ -157,7 +165,7 @@ class Meteotemplate(weewx.restx.StdRESTbase):
 class MeteotemplateThread(weewx.restx.RESTThread):
 
     def __init__(self, q, password, server_url=Meteotemplate.DEFAULT_URL, skip_upload=False,
-                 manager_dict=None,
+                 manager_dict=None, field_map=None,
                  post_interval=None, max_backlog=sys.maxsize, stale=None,
                  log_success=True, log_failure=True,
                  timeout=60, max_tries=3, retry_wait=5):
@@ -170,11 +178,13 @@ class MeteotemplateThread(weewx.restx.RESTThread):
         self.password = password
         self.skip_upload = to_bool(skip_upload)
         self.field_map = self.create_default_field_map()
-        # FIXME: make field map changes available via config file
+        if field_map:
+            for name, observation in field_map.items():
+                self.field_map[name] = (observation, 0 if name == 'L' else 3)
         loginf("Data will be uploaded to %s" % self.server_url)
 
     def check_response(self, response):
-        txt = response.read().decode()
+        txt = response.read().decode().strip()
         if txt != 'Success':
             raise weewx.restx.FailedPost("Server returned '%s'" % txt)
 

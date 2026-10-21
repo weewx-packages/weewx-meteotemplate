@@ -1,0 +1,66 @@
+import http.server
+import queue
+import sqlite3
+import threading
+from urllib.parse import parse_qs, urlsplit
+
+import pytest
+import weewx
+import weewx.restx
+import meteotemplate
+
+
+class Archive:
+    table_name = 'archive'
+
+    def __init__(self):
+        self.connection=sqlite3.connect(':memory:')
+        self.connection.execute('CREATE TABLE archive (dateTime INTEGER, usUnits INTEGER, rain REAL)')
+        self.connection.executemany('INSERT INTO archive VALUES (?,17,?)', [(1700049300,2),(1700049600,3)])
+
+    def getSql(self, query, parameters):
+        return self.connection.execute(query,parameters).fetchone()
+
+
+def test_daily_rain_uses_archive_sum_not_last_increment():
+    worker=meteotemplate.MeteotemplateThread(queue.Queue(),password='local')
+    record=worker.get_record({'dateTime':1700049600,'usUnits':weewx.METRICWX,'rain':3},Archive())
+    data=parse_qs(urlsplit(worker.format_url(record)).query)
+    assert data['R']==['5.000']
+
+
+def test_optional_ecowitt_fields_reach_receiver_and_errors_stay_visible():
+    received=[]
+    reply=[b'Success\n']
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            received.append(parse_qs(urlsplit(self.path).query))
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(reply[0])
+
+        def log_message(self,*args):
+            pass
+
+    server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Handler)
+    thread=threading.Thread(target=server.serve_forever)
+    thread.start()
+    try:
+        worker=meteotemplate.MeteotemplateThread(queue.Queue(),password='local',server_url='http://127.0.0.1:%d/api.php'%server.server_port,field_map={'PP1':'pm2_5','PP2':'pm10','L':'lightning_strike_count'},max_tries=1)
+        worker.process_record({'dateTime':1700000000,'usUnits':weewx.METRICWX,'pm2_5':0,'pm10':None,'lightning_strike_count':2},None)
+        assert received[0]['PP1']==['0.000']
+        assert received[0]['L']==['2']
+        assert 'PP2' not in received[0]
+        reply[0]=b'Unauthorized'
+        with pytest.raises(weewx.restx.FailedPost):
+            worker.process_record({'dateTime':1700000300,'usUnits':weewx.METRICWX,'outTemp':0},None)
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+
+def test_prerelease_of_newer_weewx_is_supported():
+    assert meteotemplate._version_key('5.2.0b1') > meteotemplate._version_key('3.5.0')
+    assert meteotemplate._version_key('3.5.0b1') < meteotemplate._version_key('3.5.0')
