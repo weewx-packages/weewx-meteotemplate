@@ -71,7 +71,7 @@ import weewx.restx
 import weewx.units
 from weeutil.weeutil import to_bool, list_as_string
 
-VERSION = "0.11.0"
+VERSION = "0.11.1"
 
 def _version_key(value):
     """Return a release tuple with prereleases before the final release.

@@ -1,4 +1,4 @@
-Unreleased
+0.11.1 23oct2026
 * ignore unknown options in [[Meteotemplate]] with a warning instead of
   stopping WeeWX at startup
 * send snow depth (SD) in mm, as the Meteotemplate API expects. It was
