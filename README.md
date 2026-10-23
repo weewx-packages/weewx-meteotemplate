@@ -56,6 +56,8 @@ failed upload.
 | `max_tries` | `3` | Attempts per record. |
 | `retry_wait` | `5` | Seconds between attempts. |
 
+WeeWX logs a warning for any other option in the section and ignores it.
+
 ### Sending LOOP packets
 
 Set `binding = loop` to send every LOOP packet instead of every archive record.
@@ -85,19 +87,19 @@ Only observations with a value are sent. The default map is
 Before upload, records are converted to the WeeWX `METRIC` unit system.
 Temperature is sent in Celsius, pressure in mbar, wind in km/h, and rain
 and rain rate in mm and mm/h. `R` is the rain since midnight. When a record has
-no `dayRain`, WeeWX sums it from the archive of `wx_binding`.
+no `dayRain`, WeeWX sums it from the archive of `wx_binding`. Snow depth (`SD`)
+is sent in mm.
 
 ## Limitations
 
-* Snow depth (`SD`) is sent in centimetres, the `METRIC` unit for
-  `snowDepth`. Daily snow (`SN`) is sent unconverted, in the unit system of
-  the record.
+* Daily snow (`SN`, from `daySnow`) is sent unconverted. The API expects
+  mm, but WeeWX has no unit for `daySnow`, so the value arrives in whatever
+  unit the driver uses.
 * Battery status fields of the default map are sent. Battery voltages have no
   field in the Meteotemplate API.
 * Check additional field names against the `api.php` of your Meteotemplate
   installation. A WH41 sensor measures PM2.5 only, so a `pm10` mapping
   sends nothing for it.
-* An option not named on this page stops WeeWX at startup.
 * The tests use a local receiver. They do not check the path, the password or
   the replies of your Meteotemplate server.
 

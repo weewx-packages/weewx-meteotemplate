@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # Modified 2026-10-22 by weewx-packages: compatibility and tracker repairs.
+# Modified 2026-10-23 by weewx-packages: ignore unknown options, send snow
+#   depth in mm.
 # Copyright 2016-2020 Matthew Wall
 # Licensed under the terms of the GPLv3
 
@@ -35,6 +37,8 @@ Parameters:
   UV - ultraviolet index
   TIN - indoor temperature (C)
   HIN - indoor humidity (%)
+  SN - daily cumulative new snow (mm since midnight)
+  SD - current snow depth (mm)
   ...
 
 A parameter is ignored if:
@@ -53,6 +57,7 @@ schema.  Battery voltages are not included (the meteotemplate API has no
 provision for battery voltage).
 """
 
+import inspect
 import queue
 import sys
 import time
@@ -100,6 +105,9 @@ try:
     def loginf(msg):
         log.info(msg)
 
+    def logwarn(msg):
+        log.warning(msg)
+
     def logerr(msg):
         log.error(msg)
 
@@ -115,6 +123,9 @@ except ImportError:
 
     def loginf(msg):
         logmsg(syslog.LOG_INFO, msg)
+
+    def logwarn(msg):
+        logmsg(syslog.LOG_WARNING, msg)
 
     def logerr(msg):
         logmsg(syslog.LOG_ERR, msg)
@@ -141,6 +152,15 @@ class Meteotemplate(weewx.restx.StdRESTbase):
 
         site_dict['field_map'] = dict(cfg_dict['StdRESTful']['Meteotemplate'].get('field_map', {}))
         binding = list_as_string(site_dict.pop('binding', 'archive')).lower()
+        # The options are passed to MeteotemplateThread as keyword arguments,
+        # so a name it does not accept would raise TypeError and stop WeeWX.
+        # Drop such names instead. 'q' is not an option; the service passes
+        # its own queue.
+        known = set(inspect.signature(MeteotemplateThread.__init__).parameters)
+        known -= {'self', 'q'}
+        for key in sorted(set(site_dict) - known):
+            logwarn("Ignoring unknown option %s" % key)
+            del site_dict[key]
 
         try:
             site_dict['manager_dict'] = weewx.manager.get_manager_dict_from_config(cfg_dict, 'wx_binding')
@@ -194,6 +214,8 @@ class MeteotemplateThread(weewx.restx.RESTThread):
             record['dayRain'] *= 10.0 # convert to mm
         if 'rainRate' in record and record['rainRate'] is not None:
             record['rainRate'] *= 10.0 # convert to mm/h
+        if 'snowDepth' in record and record['snowDepth'] is not None:
+            record['snowDepth'] *= 10.0 # convert to mm
         parts = dict()
         parts['PASS'] = self.password
         parts['U'] = record['dateTime']
@@ -230,8 +252,11 @@ class MeteotemplateThread(weewx.restx.RESTThread):
             'UV': ('UV', 0),
             'TIN': ('inTemp', 2), # degree_C
             'HIN': ('inHumidity', 1), # percent
-            'SN': ('daySnow', 3), # mm
-            'SD': ('snowDepth', 3), # mm
+            # The API expects mm. WeeWX has no unit group for daySnow, so
+            # to_std_system() leaves it alone and it is sent in whatever unit
+            # the driver put it in.
+            'SN': ('daySnow', 3),
+            'SD': ('snowDepth', 3), # mm, converted in format_url()
             'L': ('lightning', 0),
             'NL': ('noise', 2)} # dB
 
