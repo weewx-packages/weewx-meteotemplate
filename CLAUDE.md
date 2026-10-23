@@ -2,6 +2,8 @@
 
 WeeWX extension. The runtime module is in `bin/user/`; `install.py` is the extension installer.
 
+README follows the weewx-packages schema and names no versions or archive URLs; installation links to the catalog page.
+
 Keep upstream Python style and use docstrings instead of runtime type annotations. Preserve copyright and license notices. Date changes to GPL/Apache files.
 
 ## Tests
