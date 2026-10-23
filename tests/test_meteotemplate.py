@@ -64,3 +64,20 @@ def test_optional_ecowitt_fields_reach_receiver_and_errors_stay_visible():
 def test_prerelease_of_newer_weewx_is_supported():
     assert meteotemplate._version_key('5.2.0b1') > meteotemplate._version_key('3.5.0')
     assert meteotemplate._version_key('3.5.0b1') < meteotemplate._version_key('3.5.0')
+
+
+def test_unknown_option_is_ignored_with_warning(tmp_path, monkeypatch, caplog):
+    import types
+    import configobj
+    monkeypatch.setattr(meteotemplate.MeteotemplateThread, 'start', lambda self: None)
+    engine=types.SimpleNamespace(bind=lambda *args: None)
+    config=configobj.ConfigObj({'WEEWX_ROOT':str(tmp_path),'StdRESTful':{'Meteotemplate':{'password':'local','timeout':'5','station':'x'}}})
+    service=meteotemplate.Meteotemplate(engine,config)
+    assert service._thread.timeout==5
+    assert 'Ignoring unknown option station' in caplog.text
+
+
+def test_snow_depth_is_sent_in_mm():
+    worker=meteotemplate.MeteotemplateThread(queue.Queue(),password='local')
+    data=parse_qs(urlsplit(worker.format_url({'dateTime':1700000000,'usUnits':weewx.US,'snowDepth':2.0})).query)
+    assert data['SD']==['50.800']
