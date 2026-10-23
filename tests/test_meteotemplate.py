@@ -81,3 +81,11 @@ def test_snow_depth_is_sent_in_mm():
     worker=meteotemplate.MeteotemplateThread(queue.Queue(),password='local')
     data=parse_qs(urlsplit(worker.format_url({'dateTime':1700000000,'usUnits':weewx.US,'snowDepth':2.0})).query)
     assert data['SD']==['50.800']
+
+
+def test_metric_record_without_database_is_not_changed():
+    worker=meteotemplate.MeteotemplateThread(queue.Queue(),password='local')
+    record={'dateTime':1700000000,'usUnits':weewx.METRIC,'dayRain':1.0,'rainRate':2.0,'snowDepth':3.0}
+    data=parse_qs(urlsplit(worker.format_url(worker.get_record(record,None))).query)
+    assert data['R']==['10.000']
+    assert record=={'dateTime':1700000000,'usUnits':weewx.METRIC,'dayRain':1.0,'rainRate':2.0,'snowDepth':3.0}

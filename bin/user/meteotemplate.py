@@ -2,6 +2,8 @@
 # Modified 2026-10-22 by weewx-packages: compatibility and tracker repairs.
 # Modified 2026-10-23 by weewx-packages: ignore unknown options, send snow
 #   depth in mm.
+# Modified 2026-10-23 by weewx-packages: convert rain and snow on a copy of
+#   the record, link the archived API page.
 # Copyright 2016-2020 Matthew Wall
 # Licensed under the terms of the GPLv3
 
@@ -13,7 +15,7 @@ http://meteotemplate.com
 This is a weewx extension that uploads data to a Meteotemplate server.  It uses
 the API described in the meteotemplate wiki:
 
-http://www.meteotemplate.com/web/wiki/wikiAPI.php
+https://web.archive.org/web/20250314032709/http://www.meteotemplate.com/web/wiki/wikiAPI.php
 
 The set of fields actually sent depends on the sensors available and the way
 the hardware sends data from those fields.
@@ -209,7 +211,11 @@ class MeteotemplateThread(weewx.restx.RESTThread):
             raise weewx.restx.FailedPost("Server returned '%s'" % txt)
 
     def format_url(self, record):
-        record = weewx.units.to_std_system(record, weewx.METRIC)
+        # to_std_system() returns the record itself if it is already METRIC,
+        # and get_record() copies it only when it has a database. Without the
+        # copy, the conversions below would change the packet or record that
+        # the engine passes to every other service.
+        record = dict(weewx.units.to_std_system(record, weewx.METRIC))
         if 'dayRain' in record and record['dayRain'] is not None:
             record['dayRain'] *= 10.0 # convert to mm
         if 'rainRate' in record and record['rainRate'] is not None:
