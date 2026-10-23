@@ -3,6 +3,9 @@ Unreleased
   stopping WeeWX at startup
 * send snow depth (SD) in mm, as the Meteotemplate API expects. It was
   sent in cm.
+* convert rain and snow depth on a copy of the record. Without a database
+  binding, the conversion changed the event's packet or record, which later
+  services and other uploaders could see.
 
 0.10 08mar2020
 * Ported to Python 3 and WeeWX V4. -tk
